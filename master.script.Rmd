@@ -19,24 +19,56 @@ library(RColorBrewer)
 library(dendsort)
 ```
 
+## Combine HBCA Datasets and Subset on Individual
+
+Code to subset the combined HBCA epithelial compartment (basal, luminal 1, luminal 2) into seperate individual seurat objects to uploaod to GitHub. Will not be run after generating each subset.
+
+```{r subset.normbrca.dataset, eval = FALSE, echo = TRUE}
+#HBCA
+hbca.basal<-readRDS("E:/Scripts/Seurat/Seurat3_Objects/hbca_basal.rds")
+hbca.luminal1<-readRDS("E:/Scripts/Seurat/Seurat3_Objects/hbca_luminal1.rds")
+hbca.luminal2<-readRDS("E:/Scripts/Seurat/Seurat3_Objects/hbca_luminal2.rds")
+
+hbca.combined<-merge(x = hbca.basal,
+                     y = c(hbca.luminal1,hbca.luminal2))
+hbca.patient.list <- SplitObject(hbca.combined, split.by = "patient_id")
+
+hbca.patients <- names(hbca.patient.list)
+for (i in 1:length(hbca.patient.list)){
+  assign(paste(hbca.patients[i]), hbca.patient.list[[i]])
+}
+
+for (i in 1:length(hbca.patient.list)){
+  object<-hbca.patient.list[[i]]
+  saveRDS(object, file = paste("C:/Users/Ryan/Documents/pdx-hbca-integration/seurat-objects/",hbca.patients[i],"_seurat3_object.rds",sep = ""))
+  print(paste("C:/Users/Ryan/Documents/pdx-hbca-integration/seurat-objects/",hbca.patients[i],"_seurat3_object.rds",sep = ""))
+}
+```
+
 ## Load in seurat objects
 
-```{r load.objects, eval = FALSE, echo = FALSE}
+```{r load.objects, eval = TRUE, echo = TRUE}
 #HCI001
 load("seurat-objects/hci001.expected.counts.trimmed.seurat3.object.Rda")
 #HCI002
 load("seurat-objects/hci002.expected.counts.trimmed.seurat3.object.Rda")
 #HCI010
 load("seurat-objects/hci010.expected.counts.trimmed.seurat3.object.Rda")
-#Norm/BRCA
-load("seurat-objects/norm.brca.integrated.epithelial.Rda")
+#HBCA
+load("C:/Users/Ryan/Documents/pdx-hbca-integration/hbca_patient_names.txt")
+hbca.patient.list<-list()
+for (i in 1:length(hbca.patients)){
+  hbca.patient.list[[i]]<-assign(paste(hbca.patients[i]),
+         readRDS(paste("C:/Users/Ryan/Documents/pdx-hbca-integration/seurat-objects/",hbca.patients[i],"_seurat3_object.rds",sep = "")))
+  names(hbca.patient.list)[i]<-paste(hbca.patients[i])
+}
+for (i in 1){
+  hbca.combined<-merge(hbca.patient.list[[i]], hbca.patient.list[[i+1]])
+  for (k in 3:length(hbca.patient.list)){
+    hbca.combined<-merge(hbca.combined, hbca.patient.list[[k]])
+  }
+}
+hbca.combined<-merge(hbca.patient.list[[1]],hbca.patient.list[2:length(hbca.patient.list)])
 ```
 
-## Set Assay to Counts for all Datasets
 
-```{r subset.normbrca.dataset, eval = FALSE, echo = FALSE}
-DefaultAssay(norm.brca.integrated.epithelial)<-"RNA"
-DefaultAssay(p01.counts)<-"RNA"
-DefaultAssay(p02.counts)<-"RNA"
-DefaultAssay(p10.counts)<-"RNA"
-```
