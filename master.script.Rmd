@@ -1,0 +1,42 @@
+---
+title: "HBCA and PDX Model Label Transfer"
+author: "Ryan Davis"
+date: "May 4, 2020"
+output: html_document
+---
+
+## Load R packages
+
+```{r load.packages, echo = FALSE}
+library(Seurat)
+library(dplyr)
+library(reshape2)
+library(ggplot2)
+library(patchwork)
+library(cowplot)
+library(pheatmap)
+library(RColorBrewer)
+library(dendsort)
+```
+
+## Load in seurat objects
+
+```{r load.objects, eval = FALSE, echo = FALSE}
+#HCI001
+load("seurat-objects/hci001.expected.counts.trimmed.seurat3.object.Rda")
+#HCI002
+load("seurat-objects/hci002.expected.counts.trimmed.seurat3.object.Rda")
+#HCI010
+load("seurat-objects/hci010.expected.counts.trimmed.seurat3.object.Rda")
+#Norm/BRCA
+load("seurat-objects/norm.brca.integrated.epithelial.Rda")
+```
+
+## Set Assay to Counts for all Datasets
+
+```{r subset.normbrca.dataset, eval = FALSE, echo = FALSE}
+DefaultAssay(norm.brca.integrated.epithelial)<-"RNA"
+DefaultAssay(p01.counts)<-"RNA"
+DefaultAssay(p02.counts)<-"RNA"
+DefaultAssay(p10.counts)<-"RNA"
+```
