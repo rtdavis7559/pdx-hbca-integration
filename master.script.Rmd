@@ -47,6 +47,51 @@ for (i in 1:length(hbca.patient.list)){
   print(paste("C:/Users/Ryan/Documents/pdx-hbca-integration/seurat-objects/",hbca.patients[i],"_seurat3_object.rds",sep = ""))
 }
 ```
+## Calculate HBCA Integration by Patient
+
+Calculate data integration by patient using log-normalization. Datasets pt8, pt20, pt22, pt25, pt26, pt27, pt28, pt31, pt35 had too few cells, and I removed them from the integration
+
+```{r hbca.dataset.integration, eval = FALSE, echo = TRUE}
+#HBCA
+load("hbca_patient_names.txt")
+hbca.patient.list<-list()
+for (i in 1:length(hbca.patients)){
+  hbca.patient.list[[i]]<-assign(paste(hbca.patients[i]),
+         readRDS(paste("seurat-objects/",hbca.patients[i],"_seurat3_object.rds",sep = "")))
+  names(hbca.patient.list)[i]<-paste(hbca.patients[i])
+}
+#Log Normalize Data
+for (i in 1:length(hbca.patient.list)) {
+    hbca.patient.list[[i]] <- NormalizeData(hbca.patient.list[[i]], verbose = FALSE, assay = "RNA")
+    hbca.patient.list[[i]] <- FindVariableFeatures(hbca.patient.list[[i]], selection.method = "vst", 
+        nfeatures = 2000, verbose = FALSE, assay = "RNA")
+}
+#Remove patients with too few cells
+hbca.patient.list$pt8<-NULL
+hbca.patient.list$pt20<-NULL
+hbca.patient.list$pt22<-NULL
+hbca.patient.list$pt25<-NULL
+hbca.patient.list$pt26<-NULL
+hbca.patient.list$pt27<-NULL
+hbca.patient.list$pt28<-NULL
+hbca.patient.list$pt31<-NULL
+hbca.patient.list$pt35<-NULL
+
+#Find Integration Anchors
+hbca.patient.anchors <- FindIntegrationAnchors(object.list = hbca.patient.list, dims = 1:30, k.filter = 100, k.anchor = 2, k.score = 20)
+#Integrate Data
+hbca.integrated <- IntegrateData(anchorset = hbca.patient.anchors, dims = 1:30)
+#Dimentionality Reduction
+DefaultAssay(hbca.integrated) <- "integrated"
+# Run the standard workflow for visualization and clustering
+hbca.integrated <- ScaleData(hbca.integrated, verbose = FALSE)
+hbca.integrated <- RunPCA(hbca.integrated, npcs = 30, verbose = FALSE)
+hbca.integrated <- RunUMAP(hbca.integrated, reduction = "pca", dims = 1:30)
+p1 <- DimPlot(hbca.integrated, reduction = "umap", group.by = "coarse.ident")
+p2 <- DimPlot(hbca.integrated, reduction = "umap", group.by = "patient_id", label = FALSE, 
+    repel = TRUE)
+p1 + p2
+```
 
 ## Load in seurat objects
 
@@ -58,11 +103,11 @@ load("seurat-objects/hci002.expected.counts.trimmed.seurat3.object.Rda")
 #HCI010
 load("seurat-objects/hci010.expected.counts.trimmed.seurat3.object.Rda")
 #HBCA
-load("pdx-hbca-integration/hbca_patient_names.txt")
+load("hbca_patient_names.txt")
 hbca.patient.list<-list()
 for (i in 1:length(hbca.patients)){
   hbca.patient.list[[i]]<-assign(paste(hbca.patients[i]),
-         readRDS(paste("pdx-hbca-integration/seurat-objects/",hbca.patients[i],"_seurat3_object.rds",sep = "")))
+         readRDS(paste("seurat-objects/",hbca.patients[i],"_seurat3_object.rds",sep = "")))
   names(hbca.patient.list)[i]<-paste(hbca.patients[i])
 }
 for (i in 1){
@@ -135,26 +180,26 @@ p10.counts[["pdx.surgical.side"]]<-p10.updated$pdx.surgical.side
 ```
 ```{r label.transfer.calculation, eval=TRUE, echo=FALSE}
 hci001.query <- p01.counts
-DefaultAssay(hbca.combined)<-"integrated"
-hci001.anchors <- FindTransferAnchors(reference = hbca.combined, query = hci001.query, 
+DefaultAssay(hbca.integrated)<-"integrated"
+hci001.anchors <- FindTransferAnchors(reference = hbca.integrated, query = hci001.query, 
     dims = 1:30)
-predictions <- TransferData(anchorset = hci001.anchors, refdata = hbca.combined$coarse.ident, 
+predictions <- TransferData(anchorset = hci001.anchors, refdata = hbca.integrated$coarse.ident, 
     dims = 1:30)
 hci001.query <- AddMetaData(hci001.query, metadata = predictions)
 
 hci002.query <- p02.counts
-DefaultAssay(hbca.combined)<-"integrated"
-hci002.anchors <- FindTransferAnchors(reference = hbca.combined, query = hci002.query, 
+DefaultAssay(hbca.integrated)<-"integrated"
+hci002.anchors <- FindTransferAnchors(reference = hbca.integrated, query = hci002.query, 
     dims = 1:30)
-predictions <- TransferData(anchorset = hci002.anchors, refdata = hbca.combined$coarse.ident, 
+predictions <- TransferData(anchorset = hci002.anchors, refdata = hbca.integrated$coarse.ident, 
     dims = 1:30)
 hci002.query <- AddMetaData(hci002.query, metadata = predictions)
 
 hci010.query <- p10.counts
-DefaultAssay(hbca.combined)<-"integrated"
-hci010.anchors <- FindTransferAnchors(reference = hbca.combined, query = hci010.query, 
+DefaultAssay(hbca.integrated)<-"integrated"
+hci010.anchors <- FindTransferAnchors(reference = hbca.integrated, query = hci010.query, 
     dims = 1:30)
-predictions <- TransferData(anchorset = hci010.anchors, refdata = hbca.combined$coarse.ident, 
+predictions <- TransferData(anchorset = hci010.anchors, refdata = hbca.integrated$coarse.ident, 
     dims = 1:30)
 hci010.query <- AddMetaData(hci010.query, metadata = predictions)
 ```
