@@ -179,27 +179,32 @@ p10.counts[["pdx.surgery.type"]]<-p10.updated$pdx.surgery.type
 p10.counts[["pdx.surgical.side"]]<-p10.updated$pdx.surgical.side
 ```
 ```{r label.transfer.calculation, eval=TRUE, echo=FALSE}
+options(future.globals.maxSize = (6000*1024^2))
+memory.size(max = TRUE)
 hci001.query <- p01.counts
 DefaultAssay(hbca.integrated)<-"integrated"
-hci001.anchors <- FindTransferAnchors(reference = hbca.integrated, query = hci001.query, 
+Idents(hbca.integrated)<-"orig.ident"
+hbca.integrated.downsample<-SubsetData(hbca.integrated, max.cells.per.ident = 30000)
+
+hci001.anchors <- FindTransferAnchors(reference = hbca.integrated.downsample, query = hci001.query, 
     dims = 1:30)
-predictions <- TransferData(anchorset = hci001.anchors, refdata = hbca.integrated$coarse.ident, 
+predictions <- TransferData(anchorset = hci001.anchors, refdata = hbca.integrated.downsample$coarse.ident, 
     dims = 1:30)
 hci001.query <- AddMetaData(hci001.query, metadata = predictions)
 
 hci002.query <- p02.counts
-DefaultAssay(hbca.integrated)<-"integrated"
-hci002.anchors <- FindTransferAnchors(reference = hbca.integrated, query = hci002.query, 
+DefaultAssay(hbca.integrated.downsample)<-"integrated"
+hci002.anchors <- FindTransferAnchors(reference = hbca.integrated.downsample, query = hci002.query, 
     dims = 1:30)
-predictions <- TransferData(anchorset = hci002.anchors, refdata = hbca.integrated$coarse.ident, 
+predictions <- TransferData(anchorset = hci002.anchors, refdata = hbca.integrated.downsample$coarse.ident, 
     dims = 1:30)
 hci002.query <- AddMetaData(hci002.query, metadata = predictions)
 
 hci010.query <- p10.counts
-DefaultAssay(hbca.integrated)<-"integrated"
-hci010.anchors <- FindTransferAnchors(reference = hbca.integrated, query = hci010.query, 
+DefaultAssay(hbca.integrated.downsample)<-"integrated"
+hci010.anchors <- FindTransferAnchors(reference = hbca.integrated.downsample, query = hci010.query, 
     dims = 1:30)
-predictions <- TransferData(anchorset = hci010.anchors, refdata = hbca.integrated$coarse.ident, 
+predictions <- TransferData(anchorset = hci010.anchors, refdata = hbca.integrated.downsample$coarse.ident, 
     dims = 1:30)
 hci010.query <- AddMetaData(hci010.query, metadata = predictions)
 ```
@@ -209,12 +214,9 @@ hci001.prediction.plot<-FetchData(hci001.query, c("tissue",
                                                   "paper.ident",
                                                   "predicted.id",
                                                   "cell.names",
-                                                  "prediction.score.NORMAL.Basal",
-                                                  "prediction.score.NORMAL.Luminal_1",
-                                                  "prediction.score.NORMAL.Luminal_2",
-                                                  "prediction.score.BRCA.Basal",
-                                                  "prediction.score.BRCA.Luminal_1",
-                                                  "prediction.score.BRCA.Luminal_2"))
+                                                  "prediction.score.luminal2",
+                                                  "prediction.score.luminal1",
+                                                  "prediction.score.basal"))
 levels(hci001.prediction.plot$tissue)<-c("Metastatic","Tumor")
 hci001.prediction.plot.melted<-melt(hci001.prediction.plot)
 
@@ -231,7 +233,8 @@ colors<-brewer.pal(5, "Dark2")
 hci001.prediction.heatmap.colors<-list("Status" = c("Tumor"=colors[1],"Metastatic"=colors[2]),
                                        "Paper ID" = c("A1"=colors[3],"A2"=colors[4],"A3"=colors[5]))
 
-hci001.prediction.heatmap<-t(hci001.prediction.plot[,5:10])
+head(hci001.prediction.plot)
+hci001.prediction.heatmap<-t(hci001.prediction.plot[,5:7])
 rownames(hci001.prediction.heatmap)<-c("Normal Basal",
                                        "Normal Luminal 1",
                                        "Normal Luminal 2",
@@ -243,12 +246,13 @@ sort_hclust <- function(...) as.hclust(dendsort(as.dendrogram(...)))
 mat_cluster_cols <- hclust(dist(t((as.matrix(hci001.prediction.heatmap)))))
 mat_cluster_cols <- sort_hclust(mat_cluster_cols)
 mat_cluster_rows <- sort_hclust(hclust(dist(as.matrix(hci001.prediction.heatmap))))
+range(hci001.query$prediction.score.luminal1)
 
 pheatmap((as.matrix(hci001.prediction.heatmap)),
          scale = "column",
          show_colnames = F,
-         cluster_cols = mat_cluster_cols,
-         cluster_rows = mat_cluster_rows,
+        # cluster_cols = mat_cluster_cols,
+         #cluster_rows = mat_cluster_rows,
          color = PurpleAndYellow(50),
          annotation_col = hci001.prediction.heatmap.labels,
          annotation_colors = hci001.prediction.heatmap.colors,
