@@ -7,7 +7,7 @@ output: html_document
 
 ## Load R packages
 
-```{r load.packages, echo = FALSE}
+```{r load.packages, echo = FALSE, eval=TRUE}
 library(Seurat)
 library(dplyr)
 library(reshape2)
@@ -90,7 +90,7 @@ hbca.integrated <- RunUMAP(hbca.integrated, reduction = "pca", dims = 1:30)
 p1 <- DimPlot(hbca.integrated, reduction = "umap", group.by = "coarse.ident")
 p2 <- DimPlot(hbca.integrated, reduction = "umap", group.by = "patient_id", label = FALSE, 
     repel = TRUE)
-p1 + p2
+save(hbca.integrated, file = "E:/Scripts/Seurat/Seurat3_Objects/hbca.integrated.Seurat3.object.Rda")
 ```
 
 ## Load in seurat objects
@@ -103,19 +103,7 @@ load("seurat-objects/hci002.expected.counts.trimmed.seurat3.object.Rda")
 #HCI010
 load("seurat-objects/hci010.expected.counts.trimmed.seurat3.object.Rda")
 #HBCA
-load("hbca_patient_names.txt")
-hbca.patient.list<-list()
-for (i in 1:length(hbca.patients)){
-  hbca.patient.list[[i]]<-assign(paste(hbca.patients[i]),
-         readRDS(paste("seurat-objects/",hbca.patients[i],"_seurat3_object.rds",sep = "")))
-  names(hbca.patient.list)[i]<-paste(hbca.patients[i])
-}
-for (i in 1){
-  hbca.combined<-merge(hbca.patient.list[[i]], hbca.patient.list[[i+1]])
-  for (k in 3:length(hbca.patient.list)){
-    hbca.combined<-merge(hbca.combined, hbca.patient.list[[k]])
-  }
-}
+load("E:/Scripts/Seurat/Seurat3_Objects/hbca.integrated.Seurat3.object.Rda")
 ```
 
 ## Label Transfer
@@ -178,14 +166,15 @@ p10.counts[["paper.ident"]]<-p10.updated$paper.ident
 p10.counts[["pdx.surgery.type"]]<-p10.updated$pdx.surgery.type
 p10.counts[["pdx.surgical.side"]]<-p10.updated$pdx.surgical.side
 ```
-```{r label.transfer.calculation, eval=TRUE, echo=FALSE}
+```{r label.transfer.calculation, eval=FALSE, echo=TRUE}
 options(future.globals.maxSize = (6000*1024^2))
 memory.size(max = TRUE)
-hci001.query <- p01.counts
 DefaultAssay(hbca.integrated)<-"integrated"
 Idents(hbca.integrated)<-"orig.ident"
 hbca.integrated.downsample<-SubsetData(hbca.integrated, max.cells.per.ident = 30000)
 
+hci001.query <- p01.counts
+hci001.query<-NormalizeData(hci001.query)
 hci001.anchors <- FindTransferAnchors(reference = hbca.integrated.downsample, query = hci001.query, 
     dims = 1:30)
 predictions <- TransferData(anchorset = hci001.anchors, refdata = hbca.integrated.downsample$coarse.ident, 
@@ -208,7 +197,13 @@ predictions <- TransferData(anchorset = hci010.anchors, refdata = hbca.integrate
     dims = 1:30)
 hci010.query <- AddMetaData(hci010.query, metadata = predictions)
 ```
+```{r label.transfer.save.objects, eval=FALSE, echo=TRUE}
+save(hci001.anchors, file = "seurat-objects/HCI001_HBCA_Anchorset_Object.Rda")
+save(hci002.anchors, file = "seurat-objects/HCI002_HBCA_Anchorset_Object.Rda")
+save(hci010.anchors, file = "seurat-objects/HCI010_HBCA_Anchorset_Object.Rda")
 
+load(file = "seurat-objects/HCI001_HBCA_Anchorset_Object.Rda")
+```
 ```{r label.transfer.visualize.hci001, eval=TRUE, echo=FALSE, fig.height=4, fig.width=7}
 hci001.prediction.plot<-FetchData(hci001.query, c("tissue",
                                                   "paper.ident",
@@ -219,7 +214,6 @@ hci001.prediction.plot<-FetchData(hci001.query, c("tissue",
                                                   "prediction.score.basal"))
 levels(hci001.prediction.plot$tissue)<-c("Metastatic","Tumor")
 hci001.prediction.plot.melted<-melt(hci001.prediction.plot)
-
 ggplot(hci001.prediction.plot.melted, aes(value, fill=tissue))+
   geom_histogram(binwidth = 0.01)+
   ggtitle("Prediction Score HCI001")+
@@ -233,45 +227,36 @@ colors<-brewer.pal(5, "Dark2")
 hci001.prediction.heatmap.colors<-list("Status" = c("Tumor"=colors[1],"Metastatic"=colors[2]),
                                        "Paper ID" = c("A1"=colors[3],"A2"=colors[4],"A3"=colors[5]))
 
-head(hci001.prediction.plot)
 hci001.prediction.heatmap<-t(hci001.prediction.plot[,5:7])
-rownames(hci001.prediction.heatmap)<-c("Normal Basal",
-                                       "Normal Luminal 1",
-                                       "Normal Luminal 2",
-                                       "BRCA Basal",
-                                       "BRCA Luminal 1",
-                                       "BRCA Luminal 2")
+rownames(hci001.prediction.heatmap)<-c("Luminal 2",
+                                       "Luminal 1",
+                                       "Basal")
 
 sort_hclust <- function(...) as.hclust(dendsort(as.dendrogram(...)))
 mat_cluster_cols <- hclust(dist(t((as.matrix(hci001.prediction.heatmap)))))
 mat_cluster_cols <- sort_hclust(mat_cluster_cols)
 mat_cluster_rows <- sort_hclust(hclust(dist(as.matrix(hci001.prediction.heatmap))))
-range(hci001.query$prediction.score.luminal1)
 
 pheatmap((as.matrix(hci001.prediction.heatmap)),
          scale = "column",
          show_colnames = F,
-        # cluster_cols = mat_cluster_cols,
-         #cluster_rows = mat_cluster_rows,
+         cluster_cols = mat_cluster_cols,
+         cluster_rows = mat_cluster_rows,
          color = PurpleAndYellow(50),
          annotation_col = hci001.prediction.heatmap.labels,
          annotation_colors = hci001.prediction.heatmap.colors,
-         cutree_cols = 3)
+         cutree_cols = 1)
 ```
 ```{r label.transfer.visualize.hci002, eval=TRUE, echo=FALSE, fig.height=4, fig.width=8}
 hci002.prediction.plot<-FetchData(hci002.query, c("tissue",
                                                   "paper.ident",
                                                   "predicted.id",
                                                   "cell.names",
-                                                  "prediction.score.NORMAL.Basal",
-                                                  "prediction.score.NORMAL.Luminal_1",
-                                                  "prediction.score.NORMAL.Luminal_2",
-                                                  "prediction.score.BRCA.Basal",
-                                                  "prediction.score.BRCA.Luminal_1",
-                                                  "prediction.score.BRCA.Luminal_2"))
+                                                  "prediction.score.luminal2",
+                                                  "prediction.score.luminal1",
+                                                  "prediction.score.basal"))
 levels(hci002.prediction.plot$tissue)<-c("Metastatic","Metastatic","Tumor")
 hci002.prediction.plot.melted<-melt(hci002.prediction.plot)
-
 ggplot(hci002.prediction.plot.melted, aes(value, fill=tissue))+
   geom_histogram(binwidth = 0.01)+
   ggtitle("Prediction Score hci002")+
@@ -285,13 +270,10 @@ colors<-brewer.pal(7, "Dark2")
 hci002.prediction.heatmap.colors<-list("Status" = c("Tumor"=colors[1],"Metastatic"=colors[2]),
                                        "Paper ID" = c("B1"=colors[3],"B2"=colors[4],"B3"=colors[5],"B4"=colors[6],"B5"=colors[7]))
 
-hci002.prediction.heatmap<-t(hci002.prediction.plot[,5:10])
-rownames(hci002.prediction.heatmap)<-c("Normal Basal",
-                                       "Normal Luminal 1",
-                                       "Normal Luminal 2",
-                                       "BRCA Basal",
-                                       "BRCA Luminal 1",
-                                       "BRCA Luminal 2")
+hci002.prediction.heatmap<-t(hci002.prediction.plot[,5:7])
+rownames(hci002.prediction.heatmap)<-c("Luminal 2",
+                                       "Luminal 1",
+                                       "Basal")
 
 sort_hclust <- function(...) as.hclust(dendsort(as.dendrogram(...)))
 mat_cluster_cols <- hclust(dist(t((as.matrix(hci002.prediction.heatmap)))))
@@ -306,7 +288,7 @@ pheatmap((as.matrix(hci002.prediction.heatmap)),
          color = PurpleAndYellow(50),
          annotation_col = hci002.prediction.heatmap.labels,
          annotation_colors = hci002.prediction.heatmap.colors,
-         cutree_cols = 5)
+         cutree_cols = 1)
 ```
 ```{r label.transfer.visualize.hci010, eval=TRUE, echo=FALSE, fig.height=4, fig.width=9}
 hci010.prediction.plot<-FetchData(hci010.query, c("tissue",
@@ -357,4 +339,41 @@ pheatmap((as.matrix(hci010.prediction.heatmap)),
          annotation_col = hci010.prediction.heatmap.labels,
          annotation_colors = hci010.prediction.heatmap.colors,
          cutree_cols = 5)
+```
+
+```{r label.transfer.identify.transfer.genes, eval=TRUE, echo=TRUE}
+hci001.gene.anchors<-hci001.anchors@anchor.features
+
+length(which(hci001.gene.anchors %in% rownames(hci001.query)))
+hci001.anchors.plot<-FetchData(hci001.query, c("tissue",
+                                                  "paper.ident",
+                                                  "predicted.id",
+                                                  "cell.names",
+                                                  hci001.gene.anchors), slot = "data")
+levels(hci001.anchors.plot$tissue)<-c("Metastatic","Tumor")
+
+hci001.anchors.heatmap.labels<-hci001.anchors.plot[,1:2]
+colnames(hci001.anchors.heatmap.labels)<-c("Status","Paper ID")
+
+colors<-brewer.pal(5, "Dark2")
+hci001.anchors.heatmap.colors<-list("Status" = c("Tumor"=colors[1],"Metastatic"=colors[2]),
+                                       "Paper ID" = c("A1"=colors[3],"A2"=colors[4],"A3"=colors[5]))
+
+hci001.anchors.heatmap<-t(hci001.anchors.plot[,5:ncol(hci001.anchors.plot)])
+
+sort_hclust <- function(...) as.hclust(dendsort(as.dendrogram(...)))
+mat_cluster_cols <- hclust(dist(t((as.matrix(hci001.anchors.heatmap)))))
+mat_cluster_cols <- sort_hclust(mat_cluster_cols)
+mat_cluster_rows <- sort_hclust(hclust(dist(as.matrix(hci001.anchors.heatmap))))
+
+pheatmap((as.matrix(hci001.anchors.heatmap)),
+         scale = "column",
+         show_colnames = F,
+         cluster_cols = mat_cluster_cols,
+         cluster_rows = mat_cluster_rows,
+         color = PurpleAndYellow(50),
+         annotation_col = hci001.anchors.heatmap.labels,
+         annotation_colors = hci001.anchors.heatmap.colors,
+         cutree_cols = 1,
+         show_rownames = FALSE)
 ```
