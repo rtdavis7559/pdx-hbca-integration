@@ -17,6 +17,7 @@ library(cowplot)
 library(pheatmap)
 library(RColorBrewer)
 library(dendsort)
+library(viridis)
 ```
 
 ## Combine HBCA Datasets and Subset on Individual
@@ -106,7 +107,7 @@ load("seurat-objects/hci010.expected.counts.trimmed.seurat3.object.Rda")
 load("E:/Scripts/Seurat/Seurat3_Objects/hbca.integrated.Seurat3.object.Rda")
 ```
 
-## Label Transfer
+## Label Transfer Calculation
 
 ```{r label.transfer.prep, eval=TRUE, echo=FALSE}
 
@@ -197,13 +198,28 @@ predictions <- TransferData(anchorset = hci010.anchors, refdata = hbca.integrate
     dims = 1:30)
 hci010.query <- AddMetaData(hci010.query, metadata = predictions)
 ```
+
+## Save and Load Label Transfer Objects
+
 ```{r label.transfer.save.objects, eval=FALSE, echo=TRUE}
 save(hci001.anchors, file = "seurat-objects/HCI001_HBCA_Anchorset_Object.Rda")
 save(hci002.anchors, file = "seurat-objects/HCI002_HBCA_Anchorset_Object.Rda")
 save(hci010.anchors, file = "seurat-objects/HCI010_HBCA_Anchorset_Object.Rda")
-
-load(file = "seurat-objects/HCI001_HBCA_Anchorset_Object.Rda")
+save(hci001.query, file = "seurat-objects/HCI001_HBCA_LabelTransfer_Seurat3_Object.Rda")
+save(hci002.query, file = "seurat-objects/HCI002_HBCA_LabelTransfer_Seurat3_Object.Rda")
+save(hci010.query, file = "seurat-objects/HCI010_HBCA_LabelTransfer_Seurat3_Object.Rda")
 ```
+```{r label.transfer.load.objects, eval=TRUE, echo=TRUE}
+load(file = "seurat-objects/HCI001_HBCA_Anchorset_Object.Rda")
+load(file = "seurat-objects/HCI002_HBCA_Anchorset_Object.Rda")
+load(file = "seurat-objects/HCI010_HBCA_Anchorset_Object.Rda")
+load(file = "seurat-objects/HCI001_HBCA_LabelTransfer_Seurat3_Object.Rda")
+load(file = "seurat-objects/HCI002_HBCA_LabelTransfer_Seurat3_Object.Rda")
+load(file = "seurat-objects/HCI010_HBCA_LabelTransfer_Seurat3_Object.Rda")
+```
+
+##Visualize Label Transfer Identities
+
 ```{r label.transfer.visualize.hci001, eval=TRUE, echo=FALSE, fig.height=4, fig.width=7}
 hci001.prediction.plot<-FetchData(hci001.query, c("tissue",
                                                   "paper.ident",
@@ -215,7 +231,7 @@ hci001.prediction.plot<-FetchData(hci001.query, c("tissue",
 levels(hci001.prediction.plot$tissue)<-c("Metastatic","Tumor")
 hci001.prediction.plot.melted<-melt(hci001.prediction.plot)
 ggplot(hci001.prediction.plot.melted, aes(value, fill=tissue))+
-  geom_histogram(binwidth = 0.01)+
+  geom_histogram()+
   ggtitle("Prediction Score HCI001")+
   theme_classic()+
   facet_wrap(~ variable)
@@ -258,7 +274,7 @@ hci002.prediction.plot<-FetchData(hci002.query, c("tissue",
 levels(hci002.prediction.plot$tissue)<-c("Metastatic","Metastatic","Tumor")
 hci002.prediction.plot.melted<-melt(hci002.prediction.plot)
 ggplot(hci002.prediction.plot.melted, aes(value, fill=tissue))+
-  geom_histogram(binwidth = 0.01)+
+  geom_histogram()+
   ggtitle("Prediction Score hci002")+
   theme_classic()+
   facet_wrap(~ variable)
@@ -295,12 +311,9 @@ hci010.prediction.plot<-FetchData(hci010.query, c("tissue",
                                                   "paper.ident",
                                                   "predicted.id",
                                                   "cell.names",
-                                                  "prediction.score.NORMAL.Basal",
-                                                  "prediction.score.NORMAL.Luminal_1",
-                                                  "prediction.score.NORMAL.Luminal_2",
-                                                  "prediction.score.BRCA.Basal",
-                                                  "prediction.score.BRCA.Luminal_1",
-                                                  "prediction.score.BRCA.Luminal_2"))
+                                                  "prediction.score.luminal2",
+                                                  "prediction.score.luminal1",
+                                                  "prediction.score.basal"))
 levels(hci010.prediction.plot$tissue)<-c("Metastatic","Metastatic","Tumor")
 hci010.prediction.plot.melted<-melt(hci010.prediction.plot)
 
@@ -317,13 +330,10 @@ colors<-brewer.pal(8, "Dark2")
 hci010.prediction.heatmap.colors<-list("Status" = c("Tumor"=colors[1],"Metastatic"=colors[2]),
                                        "Paper ID" = c("C1"=colors[3],"C2"=colors[4],"C3"=colors[5],"C4"=colors[6],"C5"=colors[7],"C6"=colors[8]))
 
-hci010.prediction.heatmap<-t(hci010.prediction.plot[,5:10])
-rownames(hci010.prediction.heatmap)<-c("Normal Basal",
-                                       "Normal Luminal 1",
-                                       "Normal Luminal 2",
-                                       "BRCA Basal",
-                                       "BRCA Luminal 1",
-                                       "BRCA Luminal 2")
+hci010.prediction.heatmap<-t(hci010.prediction.plot[,5:7])
+rownames(hci010.prediction.heatmap)<-c("Luminal 2",
+                                       "Luminal 1",
+                                       "Basal")
 
 sort_hclust <- function(...) as.hclust(dendsort(as.dendrogram(...)))
 mat_cluster_cols <- hclust(dist(t((as.matrix(hci010.prediction.heatmap)))))
@@ -337,11 +347,22 @@ pheatmap((as.matrix(hci010.prediction.heatmap)),
          cluster_rows = mat_cluster_rows,
          color = PurpleAndYellow(50),
          annotation_col = hci010.prediction.heatmap.labels,
-         annotation_colors = hci010.prediction.heatmap.colors,
-         cutree_cols = 5)
+         annotation_colors = hci010.prediction.heatmap.colors)
+```
+```{r label.transfer.identify.marker.genes.hbca, eval=FALSE, echo=TRUE}
+DefaultAssay(hbca.integrated)<-"RNA"
+Idents(hbca.integrated)<-"coarse.ident"
+hbca.epithelial.markers<-FindAllMarkers(hbca.integrated, only.pos = T)
+write.table(hbca.epithelial.markers, file = "marker-genes/hbca.epithelial.markers.txt", sep = "\t")
 ```
 
-```{r label.transfer.identify.transfer.genes, eval=TRUE, echo=TRUE}
+## Visualizing Tranfer Anchor Genes
+
+```{r label.transfer.visualize.transfer.genes.hci001, eval=TRUE, echo=TRUE}
+hci001.query<-NormalizeData(hci001.query)
+hci001.query<-ScaleData(hci001.query)
+
+
 hci001.gene.anchors<-hci001.anchors@anchor.features
 
 length(which(hci001.gene.anchors %in% rownames(hci001.query)))
@@ -349,31 +370,249 @@ hci001.anchors.plot<-FetchData(hci001.query, c("tissue",
                                                   "paper.ident",
                                                   "predicted.id",
                                                   "cell.names",
-                                                  hci001.gene.anchors), slot = "data")
+                                                  hci001.gene.anchors), slot = "scale.data")
 levels(hci001.anchors.plot$tissue)<-c("Metastatic","Tumor")
 
-hci001.anchors.heatmap.labels<-hci001.anchors.plot[,1:2]
-colnames(hci001.anchors.heatmap.labels)<-c("Status","Paper ID")
-
+#Specify Cell Labels (column annotations)
+hci001.anchors.heatmap.labels.column<-data.frame(Status=hci001.anchors.plot$tissue)
+rownames(hci001.anchors.heatmap.labels.column)<-rownames(hci001.anchors.plot)
+#Specify Colors for Annotations
 colors<-brewer.pal(5, "Dark2")
-hci001.anchors.heatmap.colors<-list("Status" = c("Tumor"=colors[1],"Metastatic"=colors[2]),
-                                       "Paper ID" = c("A1"=colors[3],"A2"=colors[4],"A3"=colors[5]))
-
+hci001.anchors.heatmap.colors.column<-list("Status" = c("Tumor"=colors[1],"Metastatic"=colors[2]),
+                                       "gene.type" = c("basal"=colors[3],"luminal1"=colors[4],"luminal2"=colors[5]))
+#Sort the dendrograms in order of splits for visualization
 hci001.anchors.heatmap<-t(hci001.anchors.plot[,5:ncol(hci001.anchors.plot)])
-
 sort_hclust <- function(...) as.hclust(dendsort(as.dendrogram(...)))
 mat_cluster_cols <- hclust(dist(t((as.matrix(hci001.anchors.heatmap)))))
 mat_cluster_cols <- sort_hclust(mat_cluster_cols)
 mat_cluster_rows <- sort_hclust(hclust(dist(as.matrix(hci001.anchors.heatmap))))
+#Set the breaks for the color scale of the heatmap
+quantile_breaks <- function(xs, n = 10) {
+  breaks <- quantile(xs, probs = seq(0, 1, length.out = n))
+  breaks[!duplicated(breaks)]
+}
+mat_breaks <- quantile_breaks(hci001.anchors.heatmap, n = 11)
+#Add labels for genes and colors
+hbca.epithelial.markers<-read.table(file = "marker-genes/hbca.epithelial.markers.txt", sep = "\t")
+hci001.anchors.heatmap.labels.row<-data.frame(gene.type=hbca.epithelial.markers$cluster)
+rownames(hci001.anchors.heatmap.labels.row)<-rownames(hbca.epithelial.markers)
 
+#Run the heatmap with all genes
 pheatmap((as.matrix(hci001.anchors.heatmap)),
-         scale = "column",
+         scale = "none",
          show_colnames = F,
+         breaks = mat_breaks,
          cluster_cols = mat_cluster_cols,
          cluster_rows = mat_cluster_rows,
-         color = PurpleAndYellow(50),
-         annotation_col = hci001.anchors.heatmap.labels,
-         annotation_colors = hci001.anchors.heatmap.colors,
-         cutree_cols = 1,
-         show_rownames = FALSE)
+         color = PurpleAndYellow((length(mat_breaks) - 1)),
+         annotation_col = hci001.anchors.heatmap.labels.column,
+         annotation_colors = hci001.anchors.heatmap.colors.column,
+         annotation_row = hci001.anchors.heatmap.labels.row,
+         annotation_names_row = F,
+         show_rownames = FALSE,
+         main = "All Transfer Anchor Genes (n=1400)")
+
+#Sort the dendrograms in order of splits for visualization
+hci001.anchors.heatmap.reduced<-t(hci001.anchors.plot[,which(colnames(hci001.anchors.plot) %in% hbca.epithelial.markers$gene)])
+sort_hclust <- function(...) as.hclust(dendsort(as.dendrogram(...)))
+mat_cluster_cols <- hclust(dist(t((as.matrix(hci001.anchors.heatmap.reduced)))))
+mat_cluster_cols <- sort_hclust(mat_cluster_cols)
+mat_cluster_rows <- sort_hclust(hclust(dist(as.matrix(hci001.anchors.heatmap.reduced))))
+#Set the breaks for the color scale of the heatmap.reduced
+quantile_breaks <- function(xs, n = 10) {
+  breaks <- quantile(xs, probs = seq(0, 1, length.out = n))
+  breaks[!duplicated(breaks)]
+}
+mat_breaks <- quantile_breaks(hci001.anchors.heatmap.reduced, n = 11)
+#Add labels for genes and colors
+hbca.epithelial.markers<-read.table(file = "marker-genes/hbca.epithelial.markers.txt", sep = "\t")
+hci001.anchors.heatmap.reduced.labels.row<-data.frame(gene.type=hbca.epithelial.markers$cluster)
+rownames(hci001.anchors.heatmap.reduced.labels.row)<-rownames(hbca.epithelial.markers)
+
+#Run the heatmap.reduced with all genes
+pheatmap((as.matrix(hci001.anchors.heatmap.reduced)),
+         scale = "none",
+         show_colnames = F,
+         breaks = mat_breaks,
+         cluster_cols = mat_cluster_cols,
+         cluster_rows = mat_cluster_rows,
+         color = PurpleAndYellow((length(mat_breaks) - 1)),
+         annotation_col = hci001.anchors.heatmap.labels.column,
+         annotation_colors = hci001.anchors.heatmap.colors.column,
+         annotation_row = hci001.anchors.heatmap.labels.row,
+         annotation_names_row = F,
+         show_rownames = FALSE,
+         main = "Transfer Anchor Genes Subset by Markers (n=615)")
+```
+```{r label.transfer.visualize.transfer.genes.hci002, eval=TRUE, echo=TRUE}
+hci002.query<-NormalizeData(hci002.query)
+hci002.query<-ScaleData(hci002.query)
+
+
+hci002.gene.anchors<-hci002.anchors@anchor.features
+
+length(which(hci002.gene.anchors %in% rownames(hci002.query)))
+hci002.anchors.plot<-FetchData(hci002.query, c("tissue",
+                                                  "paper.ident",
+                                                  "predicted.id",
+                                                  "cell.names",
+                                                  hci002.gene.anchors), slot = "scale.data")
+levels(hci002.anchors.plot$tissue)<-c("Metastatic","Metastatic","Tumor")
+
+#Specify Cell Labels (column annotations)
+hci002.anchors.heatmap.labels.column<-data.frame(Status=hci002.anchors.plot$tissue)
+rownames(hci002.anchors.heatmap.labels.column)<-rownames(hci002.anchors.plot)
+#Specify Colors for Annotations
+colors<-brewer.pal(5, "Dark2")
+hci002.anchors.heatmap.colors.column<-list("Status" = c("Tumor"=colors[1],"Metastatic"=colors[2]),
+                                       "gene.type" = c("basal"=colors[3],"luminal1"=colors[4],"luminal2"=colors[5]))
+#Sort the dendrograms in order of splits for visualization
+hci002.anchors.heatmap<-t(hci002.anchors.plot[,5:ncol(hci002.anchors.plot)])
+sort_hclust <- function(...) as.hclust(dendsort(as.dendrogram(...)))
+mat_cluster_cols <- hclust(dist(t((as.matrix(hci002.anchors.heatmap)))))
+mat_cluster_cols <- sort_hclust(mat_cluster_cols)
+mat_cluster_rows <- sort_hclust(hclust(dist(as.matrix(hci002.anchors.heatmap))))
+#Set the breaks for the color scale of the heatmap
+quantile_breaks <- function(xs, n = 10) {
+  breaks <- quantile(xs, probs = seq(0, 1, length.out = n))
+  breaks[!duplicated(breaks)]
+}
+mat_breaks <- quantile_breaks(hci002.anchors.heatmap, n = 11)
+#Add labels for genes and colors
+hbca.epithelial.markers<-read.table(file = "marker-genes/hbca.epithelial.markers.txt", sep = "\t")
+hci002.anchors.heatmap.labels.row<-data.frame(gene.type=hbca.epithelial.markers$cluster)
+rownames(hci002.anchors.heatmap.labels.row)<-rownames(hbca.epithelial.markers)
+
+#Run the heatmap with all genes
+pheatmap((as.matrix(hci002.anchors.heatmap)),
+         scale = "none",
+         show_colnames = F,
+         breaks = mat_breaks,
+         cluster_cols = mat_cluster_cols,
+         cluster_rows = mat_cluster_rows,
+         color = PurpleAndYellow((length(mat_breaks) - 1)),
+         annotation_col = hci002.anchors.heatmap.labels.column,
+         annotation_colors = hci002.anchors.heatmap.colors.column,
+         annotation_row = hci002.anchors.heatmap.labels.row,
+         annotation_names_row = F,
+         show_rownames = FALSE,
+         main = "All Transfer Anchor Genes (n=1346)")
+
+#Sort the dendrograms in order of splits for visualization
+hci002.anchors.heatmap.reduced<-t(hci002.anchors.plot[,which(colnames(hci002.anchors.plot) %in% hbca.epithelial.markers$gene)])
+sort_hclust <- function(...) as.hclust(dendsort(as.dendrogram(...)))
+mat_cluster_cols <- hclust(dist(t((as.matrix(hci002.anchors.heatmap.reduced)))))
+mat_cluster_cols <- sort_hclust(mat_cluster_cols)
+mat_cluster_rows <- sort_hclust(hclust(dist(as.matrix(hci002.anchors.heatmap.reduced))))
+#Set the breaks for the color scale of the heatmap.reduced
+quantile_breaks <- function(xs, n = 10) {
+  breaks <- quantile(xs, probs = seq(0, 1, length.out = n))
+  breaks[!duplicated(breaks)]
+}
+mat_breaks <- quantile_breaks(hci002.anchors.heatmap.reduced, n = 11)
+#Add labels for genes and colors
+hbca.epithelial.markers<-read.table(file = "marker-genes/hbca.epithelial.markers.txt", sep = "\t")
+hci002.anchors.heatmap.reduced.labels.row<-data.frame(gene.type=hbca.epithelial.markers$cluster)
+rownames(hci002.anchors.heatmap.reduced.labels.row)<-rownames(hbca.epithelial.markers)
+
+#Run the heatmap.reduced with all genes
+pheatmap((as.matrix(hci002.anchors.heatmap.reduced)),
+         scale = "none",
+         show_colnames = F,
+         breaks = mat_breaks,
+         cluster_cols = mat_cluster_cols,
+         cluster_rows = mat_cluster_rows,
+         color = PurpleAndYellow((length(mat_breaks) - 1)),
+         annotation_col = hci002.anchors.heatmap.labels.column,
+         annotation_colors = hci002.anchors.heatmap.colors.column,
+         annotation_row = hci002.anchors.heatmap.labels.row,
+         annotation_names_row = F,
+         show_rownames = FALSE,
+         main = "Transfer Anchor Genes Subset by Markers (n=615)")
+```
+```{r label.transfer.visualize.transfer.genes.hci010, eval=TRUE, echo=TRUE}
+hci010.query<-NormalizeData(hci010.query)
+hci010.query<-ScaleData(hci010.query)
+
+
+hci010.gene.anchors<-hci010.anchors@anchor.features
+
+length(which(hci010.gene.anchors %in% rownames(hci010.query)))
+hci010.anchors.plot<-FetchData(hci010.query, c("tissue",
+                                                  "paper.ident",
+                                                  "predicted.id",
+                                                  "cell.names",
+                                                  hci010.gene.anchors), slot = "scale.data")
+levels(hci010.anchors.plot$tissue)<-c("Metastatic","Metastatic","Tumor")
+
+#Specify Cell Labels (column annotations)
+hci010.anchors.heatmap.labels.column<-data.frame(Status=hci010.anchors.plot$tissue)
+rownames(hci010.anchors.heatmap.labels.column)<-rownames(hci010.anchors.plot)
+#Specify Colors for Annotations
+colors<-brewer.pal(5, "Dark2")
+hci010.anchors.heatmap.colors.column<-list("Status" = c("Tumor"=colors[1],"Metastatic"=colors[2]),
+                                       "gene.type" = c("basal"=colors[3],"luminal1"=colors[4],"luminal2"=colors[5]))
+#Sort the dendrograms in order of splits for visualization
+hci010.anchors.heatmap<-t(hci010.anchors.plot[,5:ncol(hci010.anchors.plot)])
+sort_hclust <- function(...) as.hclust(dendsort(as.dendrogram(...)))
+mat_cluster_cols <- hclust(dist(t((as.matrix(hci010.anchors.heatmap)))))
+mat_cluster_cols <- sort_hclust(mat_cluster_cols)
+mat_cluster_rows <- sort_hclust(hclust(dist(as.matrix(hci010.anchors.heatmap))))
+#Set the breaks for the color scale of the heatmap
+quantile_breaks <- function(xs, n = 10) {
+  breaks <- quantile(xs, probs = seq(0, 1, length.out = n))
+  breaks[!duplicated(breaks)]
+}
+mat_breaks <- quantile_breaks(hci010.anchors.heatmap, n = 11)
+#Add labels for genes and colors
+hbca.epithelial.markers<-read.table(file = "marker-genes/hbca.epithelial.markers.txt", sep = "\t")
+hci010.anchors.heatmap.labels.row<-data.frame(gene.type=hbca.epithelial.markers$cluster)
+rownames(hci010.anchors.heatmap.labels.row)<-rownames(hbca.epithelial.markers)
+
+#Run the heatmap with all genes
+pheatmap((as.matrix(hci010.anchors.heatmap)),
+         scale = "none",
+         show_colnames = F,
+         breaks = mat_breaks,
+         cluster_cols = mat_cluster_cols,
+         cluster_rows = mat_cluster_rows,
+         color = PurpleAndYellow((length(mat_breaks) - 1)),
+         annotation_col = hci010.anchors.heatmap.labels.column,
+         annotation_colors = hci010.anchors.heatmap.colors.column,
+         annotation_row = hci010.anchors.heatmap.labels.row,
+         annotation_names_row = F,
+         show_rownames = FALSE,
+         main = "All Transfer Anchor Genes (n=1546)")
+
+#Sort the dendrograms in order of splits for visualization
+hci010.anchors.heatmap.reduced<-t(hci010.anchors.plot[,which(colnames(hci010.anchors.plot) %in% hbca.epithelial.markers$gene)])
+sort_hclust <- function(...) as.hclust(dendsort(as.dendrogram(...)))
+mat_cluster_cols <- hclust(dist(t((as.matrix(hci010.anchors.heatmap.reduced)))))
+mat_cluster_cols <- sort_hclust(mat_cluster_cols)
+mat_cluster_rows <- sort_hclust(hclust(dist(as.matrix(hci010.anchors.heatmap.reduced))))
+#Set the breaks for the color scale of the heatmap.reduced
+quantile_breaks <- function(xs, n = 10) {
+  breaks <- quantile(xs, probs = seq(0, 1, length.out = n))
+  breaks[!duplicated(breaks)]
+}
+mat_breaks <- quantile_breaks(hci010.anchors.heatmap.reduced, n = 11)
+#Add labels for genes and colors
+hbca.epithelial.markers<-read.table(file = "marker-genes/hbca.epithelial.markers.txt", sep = "\t")
+hci010.anchors.heatmap.reduced.labels.row<-data.frame(gene.type=hbca.epithelial.markers$cluster)
+rownames(hci010.anchors.heatmap.reduced.labels.row)<-rownames(hbca.epithelial.markers)
+
+#Run the heatmap.reduced with all genes
+pheatmap((as.matrix(hci010.anchors.heatmap.reduced)),
+         scale = "none",
+         show_colnames = F,
+         breaks = mat_breaks,
+         cluster_cols = mat_cluster_cols,
+         cluster_rows = mat_cluster_rows,
+         color = PurpleAndYellow((length(mat_breaks) - 1)),
+         annotation_col = hci010.anchors.heatmap.labels.column,
+         annotation_colors = hci010.anchors.heatmap.colors.column,
+         annotation_row = hci010.anchors.heatmap.labels.row,
+         annotation_names_row = F,
+         show_rownames = FALSE,
+         main = "Transfer Anchor Genes Subset by Markers (n=654)")
 ```
