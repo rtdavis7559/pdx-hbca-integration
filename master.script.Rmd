@@ -176,6 +176,9 @@ hbca.integrated.downsample<-SubsetData(hbca.integrated, max.cells.per.ident = 30
 
 hci001.query <- p01.counts
 hci001.query<-NormalizeData(hci001.query)
+hci001.query<-FindVariableFeatures(hci001.query, selection.method = "vst", 
+        nfeatures = 2000, verbose = FALSE)
+DefaultAssay(hbca.integrated.downsample)<-"integrated"
 hci001.anchors <- FindTransferAnchors(reference = hbca.integrated.downsample, query = hci001.query, 
     dims = 1:30)
 predictions <- TransferData(anchorset = hci001.anchors, refdata = hbca.integrated.downsample$coarse.ident, 
@@ -183,6 +186,9 @@ predictions <- TransferData(anchorset = hci001.anchors, refdata = hbca.integrate
 hci001.query <- AddMetaData(hci001.query, metadata = predictions)
 
 hci002.query <- p02.counts
+hci002.query<-NormalizeData(hci002.query)
+hci002.query<-FindVariableFeatures(hci002.query, selection.method = "vst", 
+        nfeatures = 2000, verbose = FALSE)
 DefaultAssay(hbca.integrated.downsample)<-"integrated"
 hci002.anchors <- FindTransferAnchors(reference = hbca.integrated.downsample, query = hci002.query, 
     dims = 1:30)
@@ -191,6 +197,9 @@ predictions <- TransferData(anchorset = hci002.anchors, refdata = hbca.integrate
 hci002.query <- AddMetaData(hci002.query, metadata = predictions)
 
 hci010.query <- p10.counts
+hci010.query<-NormalizeData(hci010.query)
+hci010.query<-FindVariableFeatures(hci010.query, selection.method = "vst", 
+        nfeatures = 2000, verbose = FALSE)
 DefaultAssay(hbca.integrated.downsample)<-"integrated"
 hci010.anchors <- FindTransferAnchors(reference = hbca.integrated.downsample, query = hci010.query, 
     dims = 1:30)
@@ -198,6 +207,7 @@ predictions <- TransferData(anchorset = hci010.anchors, refdata = hbca.integrate
     dims = 1:30)
 hci010.query <- AddMetaData(hci010.query, metadata = predictions)
 ```
+
 
 ## Save and Load Label Transfer Objects
 
@@ -359,7 +369,6 @@ write.table(hbca.epithelial.markers, file = "marker-genes/hbca.epithelial.marker
 ## Visualizing Tranfer Anchor Genes
 
 ```{r label.transfer.visualize.transfer.genes.hci001, eval=TRUE, echo=TRUE}
-hci001.query<-NormalizeData(hci001.query)
 hci001.query<-ScaleData(hci001.query)
 
 
@@ -615,4 +624,21 @@ pheatmap((as.matrix(hci010.anchors.heatmap.reduced)),
          annotation_names_row = F,
          show_rownames = FALSE,
          main = "Transfer Anchor Genes Subset by Markers (n=654)")
+```
+
+## Identifying Cellular Anchors
+
+```{r label.transfer.cell.anchors.hci001, eval=TRUE, echo=FALSE}
+reference.anchors<-hci001.anchors@reference.cells[hci001.anchors@anchors[,1]]
+#Remove the "_reference" from the cell names
+reference.anchors<-gsub("_reference","",reference.anchors)
+hbca.reference.object<-SubsetData(hbca.integrated, cells = reference.anchors)
+table(hbca.reference.object@meta.data$coarse.ident)
+
+query.anchors<-hci001.anchors@query.cells[hci001.anchors@anchors[,2]]
+#Remove the "_query" from the cell names
+query.anchors<-gsub("_query","",query.anchors)
+hci001.query.object<-SubsetData(hci001.query, cells = query.anchors)
+table(hci001.query.object@meta.data$tissue)
+
 ```
